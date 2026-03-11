@@ -1,0 +1,128 @@
+const mysql = require("mysql2/promise");
+
+// --- 数据库配置 ---
+const dbConfig = {
+  host: "192.168.1.4",
+  port: 34521,
+  user: "root",
+  password: "",
+  database: "scrm_bus",
+  connectTimeout: 5000, // 5秒连接超时
+};
+
+async function main() {
+  // 启动日志，用于确认进程拉起成功
+  console.error("🚀 [MySQL MCP] 服务已启动，等待指令...");
+
+  process.stdin.on("data", async (data) => {
+    try {
+      const request = JSON.parse(data.toString());
+
+      // 1. 响应初始化
+      if (request.method === "initialize") {
+        sendResponse(request.id, {
+          protocolVersion: "2024-11-05",
+          capabilities: { tools: {} },
+          serverInfo: { name: "mysql-final-proxy", version: "1.2.0" },
+        });
+      }
+
+      // 2. 响应工具列表
+      else if (request.method === "tools/list") {
+        sendResponse(request.id, {
+          tools: [
+            {
+              name: "query",
+              description: "执行 MySQL 查询语句。必须传入 sql 参数。",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  sql: { type: "string", description: "完整的 SQL 查询语句" },
+                },
+                required: ["sql"],
+              },
+            },
+          ],
+        });
+      }
+
+      // 3. 响应工具调用 (核心逻辑)
+      else if (request.method === "tools/call") {
+        const { name, arguments: args } = request.params;
+
+        if (name === "query") {
+          // 防错检查：处理 AI 可能传错参数名的情况
+          const sqlQuery = args.sql || args.query;
+
+          if (!sqlQuery) {
+            console.error("⚠️ [警告] AI 调用了工具但未提供 SQL 语句");
+            return sendResponse(request.id, {
+              content: [
+                { type: "text", text: "错误：请提供具体的 'sql' 参数内容。" },
+              ],
+              isError: true,
+            });
+          }
+
+          console.error(`🔍 [执行 SQL]: ${sqlQuery}`);
+          let connection;
+
+          try {
+            // 建立连接
+            console.error("⏳ [数据库] 正在建立连接...");
+            connection = await mysql.createConnection(dbConfig);
+            console.error("✅ [数据库] 连接成功");
+
+            // 执行查询
+            const [rows] = await connection.execute(sqlQuery);
+
+            console.error(
+              `📈 [结果] 查询成功，返回 ${Array.isArray(rows) ? rows.length : 1} 条记录`,
+            );
+
+            // 返回结果给 AI
+            sendResponse(request.id, {
+              content: [{ type: "text", text: JSON.stringify(rows, null, 2) }],
+            });
+          } catch (dbErr) {
+            // 捕获数据库层面的报错
+            console.error(`❌ [数据库报错]: ${dbErr.message}`);
+            sendResponse(request.id, {
+              content: [
+                { type: "text", text: `SQL执行失败: ${dbErr.message}` },
+              ],
+              isError: true,
+            });
+          } finally {
+            // 关键修复：确保只有连接成功打开时才关闭，防止 "closed state" 报错
+            if (connection) {
+              await connection.end().catch(() => {});
+              console.error("🔌 [数据库] 连接已安全关闭");
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // 捕获 JSON 解析或其他系统级报错
+      console.error(`☣️ [系统报错]: ${e.message}`);
+    }
+  });
+}
+
+/**
+ * 标准 JSON-RPC 响应函数
+ */
+function sendResponse(id, result) {
+  const response = JSON.stringify({
+    jsonrpc: "2.0",
+    id,
+    result,
+  });
+  process.stdout.write(response + "\n");
+}
+
+// 错误处理：防止进程无故退出
+main().catch((err) => {
+  console.error(`💀 [致命崩溃]: ${err.message}`);
+  process.exit(1);
+});
