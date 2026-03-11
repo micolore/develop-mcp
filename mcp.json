@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "scrm-mysql": {
+      "command": "node",
+      "args": ["D:/workspace/ai/mcp/scrm_mysql_proxy.js"],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "cashbox-mysql": {
+      "command": "node",
+      "args": ["D:/workspace/ai/mcp/cashbox_mysql_proxy.js"],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "se-mysql": {
+      "command": "node",
+      "args": ["D:/workspace/ai/mcp/se_mysql_proxy.js"],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "http-engine": {
+      "command": "node",
+      "args": ["D:/workspace/ai/mcp/http_proxy.js"]
+    },
+    "elasticsearch-engine": {
+      "command": "node",
+      "args": ["D:/workspace/ai/mcp/elasticsearch.js"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "D://workspace//java//cashbox"
+      ]
+    },
+    "scrm-redis-dev": {
+      "type": "command",
+      "command": "D:\\workspace\\ai\\mcp\\redis-mcp.exe",
+      "args": [],
+      "env": {
+        "CONFIG_PATH": "D:\\workspace\\ai\\mcp\\scrm-redis-dev.toml"
+      }
+    }
+  }
+}
